@@ -58,11 +58,14 @@ export async function getUserDisplayName(userId: string): Promise<string> {
   }
 }
 
-// チャンネル名を取得
+// チャンネル名を取得（DM・グループDM にも対応）
 export async function getChannelName(channelId: string): Promise<string> {
   try {
     const result = await getSlackClient().conversations.info({ channel: channelId })
-    return '#' + (result.channel?.name ?? channelId)
+    const ch = result.channel as Record<string, unknown> | undefined
+    if (ch?.is_im) return 'DM'
+    if (ch?.is_mpim) return 'グループDM'
+    return '#' + (ch?.name ?? channelId)
   } catch {
     return channelId
   }
