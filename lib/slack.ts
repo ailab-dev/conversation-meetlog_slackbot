@@ -3,7 +3,11 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import type { CategoryLabel, SlackMessage } from '@/types/knowledge'
 import { CATEGORY_EMOJI } from '@/types/knowledge'
 
-export const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN)
+let _slackClient: WebClient | null = null
+function getSlackClient(): WebClient {
+  if (!_slackClient) _slackClient = new WebClient(process.env.SLACK_BOT_TOKEN)
+  return _slackClient
+}
 
 // 署名検証
 export function verifySlackSignature(
@@ -32,12 +36,12 @@ export async function fetchThreadMessages(
   channelId: string,
   threadTs: string
 ): Promise<SlackMessage[]> {
-  const result = await slackClient.conversations.replies({
+  const result = await getSlackClient().conversations.replies({
     channel: channelId,
     ts: threadTs,
   })
 
-  return (result.messages ?? []).map((m) => ({
+  return (result.messages ?? []).map((m: { user?: string; text?: string; ts?: string }) => ({
     user: m.user ?? 'unknown',
     text: m.text ?? '',
     ts: m.ts ?? '',
@@ -47,7 +51,7 @@ export async function fetchThreadMessages(
 // 投稿者の表示名を取得
 export async function getUserDisplayName(userId: string): Promise<string> {
   try {
-    const result = await slackClient.users.info({ user: userId })
+    const result = await getSlackClient().users.info({ user: userId })
     return result.user?.profile?.display_name || result.user?.real_name || userId
   } catch {
     return userId
@@ -57,7 +61,7 @@ export async function getUserDisplayName(userId: string): Promise<string> {
 // チャンネル名を取得
 export async function getChannelName(channelId: string): Promise<string> {
   try {
-    const result = await slackClient.conversations.info({ channel: channelId })
+    const result = await getSlackClient().conversations.info({ channel: channelId })
     return '#' + (result.channel?.name ?? channelId)
   } catch {
     return channelId
@@ -73,7 +77,7 @@ export async function postSaveNotification(
 ): Promise<void> {
   const emoji = CATEGORY_EMOJI[category]
 
-  await slackClient.chat.postMessage({
+  await getSlackClient().chat.postMessage({
     channel: channelId,
     thread_ts: threadTs,
     blocks: [

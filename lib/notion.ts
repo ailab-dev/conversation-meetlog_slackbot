@@ -1,14 +1,12 @@
 import { Client } from '@notionhq/client'
 import type { KnowledgeData } from '@/types/knowledge'
 
-const notion = new Client({ auth: process.env.NOTION_TOKEN })
-const DATABASE_ID = process.env.NOTION_DATABASE_ID!
-
 export async function createKnowledgePage(
   data: KnowledgeData
 ): Promise<{ id: string; url: string }> {
+  const notion = new Client({ auth: process.env.NOTION_TOKEN })
   const response = await notion.pages.create({
-    parent: { database_id: DATABASE_ID },
+    parent: { database_id: process.env.NOTION_DATABASE_ID! },
     properties: {
       Title: {
         title: [{ text: { content: data.title } }],
