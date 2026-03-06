@@ -83,6 +83,7 @@ export async function postSaveNotification(
   await getSlackClient().chat.postMessage({
     channel: channelId,
     thread_ts: threadTs,
+    text: `✅ Notion に保存しました（カテゴリ: ${emoji} ${category}）`,
     blocks: [
       {
         type: 'section',
