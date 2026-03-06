@@ -8,7 +8,8 @@ function getGenAI(): GoogleGenerativeAI {
 
 export async function embedText(text: string): Promise<number[]> {
   const model = getGenAI().getGenerativeModel({ model: 'gemini-embedding-001' })
-  const result = await model.embedContent(text)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await model.embedContent({ content: { parts: [{ text }], role: 'user' }, outputDimensionality: 1536 } as any)
   return result.embedding.values
 }
 
