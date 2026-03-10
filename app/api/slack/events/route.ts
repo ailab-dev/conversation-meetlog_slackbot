@@ -105,17 +105,16 @@ async function handleReactionAdded(event: Record<string, unknown>): Promise<void
   const category = CATEGORY_MAP[reaction as ReactionEmoji]
   const savedAt = new Date().toISOString()
 
-  const [notionResult] = await Promise.all([
-    createKnowledgePage({
-      title,
-      category,
-      postedBy,
-      slackChannel: channelName,
-      savedAt,
-      fullText,
-    }),
-    markAsProcessed(redisKey),
-  ])
+  // Notion保存が成功してからRedisに登録（失敗時に重複扱いにならないよう順番を明示）
+  const notionResult = await createKnowledgePage({
+    title,
+    category,
+    postedBy,
+    slackChannel: channelName,
+    savedAt,
+    fullText,
+  })
+  await markAsProcessed(redisKey)
 
   // 保存完了通知（失敗しても続行）
   try {
