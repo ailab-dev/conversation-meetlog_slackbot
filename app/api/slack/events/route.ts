@@ -10,6 +10,7 @@ import {
   postSaveNotification,
   postUsageHint,
   postAnswer,
+  postCollectConfirmation,
 } from '@/lib/slack'
 import { buildEnrichment } from '@/lib/extractor'
 import { createKnowledgePage } from '@/lib/notion'
@@ -59,6 +60,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     await handleReactionAdded(event)
   } else if (event.type === 'app_mention') {
     await handleAppMention(event)
+  } else if (event.type === 'member_joined_channel') {
+    await handleMemberJoined(event)
   }
 
   return NextResponse.json({ ok: true })
@@ -136,6 +139,17 @@ async function handleReactionAdded(event: Record<string, unknown>): Promise<void
     })
   } catch (err) {
     console.error('[Vector] upsert error:', err)
+  }
+}
+
+async function handleMemberJoined(event: Record<string, unknown>): Promise<void> {
+  // ボット自身の参加のみ対象
+  if (event.user !== process.env.SLACK_BOT_USER_ID) return
+  const channelId = event.channel as string
+  try {
+    await postCollectConfirmation(channelId)
+  } catch (err) {
+    console.error('[Slack] postCollectConfirmation error:', err)
   }
 }
 

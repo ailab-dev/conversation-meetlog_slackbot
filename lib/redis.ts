@@ -34,3 +34,33 @@ export async function markAsProcessed(key: string): Promise<void> {
     console.error('[Redis] markAsProcessed error:', err)
   }
 }
+
+// ─── フェーズ4: チャンネル収集中フラグ ───
+
+function collectingKey(channelId: string): string {
+  return `collecting:${channelId}`
+}
+
+export async function isCollecting(channelId: string): Promise<boolean> {
+  try {
+    return (await getRedis().exists(collectingKey(channelId))) === 1
+  } catch {
+    return false
+  }
+}
+
+export async function setCollecting(channelId: string, ttlSeconds = 7200): Promise<void> {
+  try {
+    await getRedis().set(collectingKey(channelId), '1', { ex: ttlSeconds })
+  } catch (err) {
+    console.error('[Redis] setCollecting error:', err)
+  }
+}
+
+export async function clearCollecting(channelId: string): Promise<void> {
+  try {
+    await getRedis().del(collectingKey(channelId))
+  } catch (err) {
+    console.error('[Redis] clearCollecting error:', err)
+  }
+}

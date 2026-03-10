@@ -134,6 +134,68 @@ export async function postSaveNotification(
   })
 }
 
+// ─── フェーズ4: データ収集関連メッセージ ───
+
+// チャンネル参加時の確認メッセージ（ボタン付き）
+export async function postCollectConfirmation(channelId: string): Promise<void> {
+  await getSlackClient().chat.postMessage({
+    channel: channelId,
+    text: 'このチャンネルの過去のメッセージをすべて保存しますか？',
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '📥 *このチャンネルの過去のメッセージをすべて保存しますか？*',
+        },
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: 'はい' },
+            style: 'primary',
+            action_id: 'collect_yes',
+          },
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: 'いいえ' },
+            action_id: 'collect_no',
+          },
+        ],
+      },
+    ],
+  })
+}
+
+// ボタン押下後にメッセージを更新（ボタンを除去してテキストに置き換え）
+export async function updateCollectMessage(
+  channelId: string,
+  messageTs: string,
+  text: string
+): Promise<void> {
+  await getSlackClient().chat.update({
+    channel: channelId,
+    ts: messageTs,
+    text,
+    blocks: [
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text },
+      },
+    ],
+  })
+}
+
+// 収集完了通知
+export async function postCollectComplete(channelId: string, count: number): Promise<void> {
+  await getSlackClient().chat.postMessage({
+    channel: channelId,
+    text: `✅ 収集完了: ${count} 件のメッセージを保存しました。`,
+  })
+}
+
 // 使い方ヒントをスレッドへ返信
 export async function postUsageHint(
   channelId: string,
