@@ -24,15 +24,18 @@ export async function createKnowledgePage(
         date: { start: data.savedAt },
       },
     },
-    children: [
-      {
-        object: 'block',
-        type: 'paragraph',
-        paragraph: {
-          rich_text: [{ text: { content: data.fullText } }],
-        },
-      },
-    ],
+    children: (() => {
+      const chunks: string[] = []
+      for (let i = 0; i < data.fullText.length; i += 1900) {
+        chunks.push(data.fullText.slice(i, i + 1900))
+      }
+      if (chunks.length === 0) chunks.push('')
+      return chunks.map((chunk) => ({
+        object: 'block' as const,
+        type: 'paragraph' as const,
+        paragraph: { rich_text: [{ text: { content: chunk } }] },
+      }))
+    })(),
   })
 
   return {
