@@ -61,8 +61,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const nextCursor = result.response_metadata?.next_cursor
   if (result.has_more && nextCursor) {
-    // 続きを QStash に積む
-    const qstash = new QStashClient({ token: process.env.QSTASH_TOKEN! })
+    // 続きを QStash に積む（QSTASH_URL でリージョン指定）
+    const qstash = new QStashClient({
+      token: process.env.QSTASH_TOKEN!,
+      ...(process.env.QSTASH_URL ? { baseUrl: process.env.QSTASH_URL } : {}),
+    })
     const baseUrl = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
       : process.env.NEXT_PUBLIC_BASE_URL!

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Client as QStashClient } from '@upstash/qstash'
 import { verifySlackSignature } from '@/lib/slack'
 import { updateCollectMessage } from '@/lib/slack'
-import { isCollecting, setCollecting } from '@/lib/redis'
+import { isCollecting, setCollecting, clearCollecting } from '@/lib/redis'
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const rawBody = await req.text()
@@ -41,16 +41,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // ボタンを除去してメッセージ更新
     await updateCollectMessage(channelId, messageTs, '📥 収集を開始しました。完了後に通知します。')
 
-    // QStash にジョブを発行
-    const qstash = new QStashClient({ token: process.env.QSTASH_TOKEN! })
+    // QStash にジョブを発行（QSTASH_URL でリージョン指定）
+    const qstash = new QStashClient({
+      token: process.env.QSTASH_TOKEN!,
+      ...(process.env.QSTASH_URL ? { baseUrl: process.env.QSTASH_URL } : {}),
+    })
     const baseUrl = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
       : process.env.NEXT_PUBLIC_BASE_URL!
 
-    await qstash.publishJSON({
-      url: `${baseUrl}/api/slack/collect`,
-      body: { channelId, cursor: null, collected: 0 },
-    })
+    try {
+      await qstash.publishJSON({
+        url: `${baseUrl}/api/slack/collect`,
+        body: { channelId, cursor: null, collected: 0 },
+      })
+    } catch (err) {
+      console.error('[QStash] publish error:', err)
+      await clearCollecting(channelId)
+      await updateCollectMessage(channelId, messageTs, '⚠️ 収集の開始に失敗しました。再度お試しください。')
+    }
 
   } else if (actionId === 'collect_no') {
     await updateCollectMessage(channelId, messageTs, 'キャンセルしました。')
