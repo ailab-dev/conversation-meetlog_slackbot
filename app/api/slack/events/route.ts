@@ -100,7 +100,7 @@ async function handleMessage(event: Record<string, unknown>): Promise<void> {
 
     // フェーズ6: 完了キーワード検知
     if (detectCompletionKeywords(rawText)) {
-      void handleTaskCompletion(channelId, threadTs)
+      await handleTaskCompletion(channelId, threadTs)
     }
   } else {
     // 親メッセージ → 新規 Notion ページ作成
@@ -129,7 +129,7 @@ async function handleMessage(event: Record<string, unknown>): Promise<void> {
     // フェーズ6: タスクキーワード検知（保存成功時のみ）
     if (pageId && detectTaskKeywords(rawText)) {
       const userId = (event.user as string) ?? ''
-      void notifyTaskCandidate(channelId, ts, rawText, userId, pageId)
+      await notifyTaskCandidate(channelId, ts, rawText, userId, pageId)
     }
   }
 }

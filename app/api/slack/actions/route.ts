@@ -75,7 +75,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // ─── フェーズ6: タスク管理 ───
   } else if (actionId === 'task_confirm_yes') {
     const pending = await getPendingTask(channelId, messageTs)
-    if (!pending) return NextResponse.json({ ok: true })
+    if (!pending) {
+      console.warn(`[Task] pending not found: channelId=${channelId} messageTs=${messageTs}`)
+      return NextResponse.json({ ok: true })
+    }
     await deletePendingTask(channelId, messageTs)
     await updateTaskMessage(channelId, messageTs, '⏳ 期日を確認中...')
 
