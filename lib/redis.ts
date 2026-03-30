@@ -110,7 +110,7 @@ const REMINDER_TTL = 60 * 60 * 24 * 5 // 5日
 // タスク追加確認ボタン待ち
 export async function setPendingTask(channelId: string, confirmMsgTs: string, data: PendingTask): Promise<void> {
   try {
-    await getRedis().set(`task_pending:${channelId}:${confirmMsgTs}`, JSON.stringify(data), { ex: PENDING_TTL })
+    await getRedis().set(`task_pending:${channelId}:${confirmMsgTs}`, data, { ex: PENDING_TTL })
   } catch (err) {
     console.error('[Redis] setPendingTask error:', err)
   }
@@ -118,9 +118,7 @@ export async function setPendingTask(channelId: string, confirmMsgTs: string, da
 
 export async function getPendingTask(channelId: string, confirmMsgTs: string): Promise<PendingTask | null> {
   try {
-    const raw = await getRedis().get<string>(`task_pending:${channelId}:${confirmMsgTs}`)
-    if (!raw) return null
-    return JSON.parse(raw) as PendingTask
+    return await getRedis().get<PendingTask>(`task_pending:${channelId}:${confirmMsgTs}`)
   } catch {
     return null
   }
@@ -135,7 +133,7 @@ export async function deletePendingTask(channelId: string, confirmMsgTs: string)
 // 日付ピッカー待ち（期日未検出時）
 export async function setDatePendingTask(channelId: string, dateMsgTs: string, data: DatePendingTask): Promise<void> {
   try {
-    await getRedis().set(`task_date_pending:${channelId}:${dateMsgTs}`, JSON.stringify(data), { ex: PENDING_TTL })
+    await getRedis().set(`task_date_pending:${channelId}:${dateMsgTs}`, data, { ex: PENDING_TTL })
   } catch (err) {
     console.error('[Redis] setDatePendingTask error:', err)
   }
@@ -143,9 +141,7 @@ export async function setDatePendingTask(channelId: string, dateMsgTs: string, d
 
 export async function getDatePendingTask(channelId: string, dateMsgTs: string): Promise<DatePendingTask | null> {
   try {
-    const raw = await getRedis().get<string>(`task_date_pending:${channelId}:${dateMsgTs}`)
-    if (!raw) return null
-    return JSON.parse(raw) as DatePendingTask
+    return await getRedis().get<DatePendingTask>(`task_date_pending:${channelId}:${dateMsgTs}`)
   } catch {
     return null
   }
@@ -160,7 +156,7 @@ export async function deleteDataPendingTask(channelId: string, dateMsgTs: string
 // タスク登録済みメタ（完了検知・リマインダー用）
 export async function setTaskMeta(channelId: string, originalMsgTs: string, data: TaskMeta): Promise<void> {
   try {
-    await getRedis().set(`task_meta:${channelId}:${originalMsgTs}`, JSON.stringify(data), { ex: TASK_TTL })
+    await getRedis().set(`task_meta:${channelId}:${originalMsgTs}`, data, { ex: TASK_TTL })
   } catch (err) {
     console.error('[Redis] setTaskMeta error:', err)
   }
@@ -168,9 +164,7 @@ export async function setTaskMeta(channelId: string, originalMsgTs: string, data
 
 export async function getTaskMeta(channelId: string, originalMsgTs: string): Promise<TaskMeta | null> {
   try {
-    const raw = await getRedis().get<string>(`task_meta:${channelId}:${originalMsgTs}`)
-    if (!raw) return null
-    return JSON.parse(raw) as TaskMeta
+    return await getRedis().get<TaskMeta>(`task_meta:${channelId}:${originalMsgTs}`)
   } catch {
     return null
   }
