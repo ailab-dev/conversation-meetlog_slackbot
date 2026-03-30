@@ -7,12 +7,20 @@ import {
   postUsageHint,
   postAnswer,
   postCollectConfirmation,
+  postTaskConfirmation,
+  postTaskComplete,
 } from '@/lib/slack'
-import { buildRedisKey, isDuplicate, markAsProcessed, isAutoCollect, setAutoCollect, getNotionPageId, setNotionPageId } from '@/lib/redis'
+import {
+  buildRedisKey, isDuplicate, markAsProcessed,
+  isAutoCollect, setAutoCollect,
+  getNotionPageId, setNotionPageId,
+  setPendingTask, getTaskMeta, getTaskUser,
+} from '@/lib/redis'
 import { embedText, generateAnswer } from '@/lib/gemini'
 import { searchVector } from '@/lib/vector'
 import { processSingleMessage } from '@/lib/collect'
-import { appendToKnowledgePage } from '@/lib/notion'
+import { appendToKnowledgePage, updateKnowledgePage } from '@/lib/notion'
+import { detectTaskKeywords, detectCompletionKeywords } from '@/lib/task'
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   // Slack リトライリクエストは無視（処理遅延による2回返信を防止）
@@ -89,7 +97,11 @@ async function handleMessage(event: Record<string, unknown>): Promise<void> {
         console.error('[AutoCollect] appendToKnowledgePage error:', err)
       }
     }
-    // 親ページが見つからない場合は個別保存しない（バルク収集時にスレッドごと取得済みのため）
+
+    // フェーズ6: 完了キーワード検知
+    if (detectCompletionKeywords(rawText)) {
+      void handleTaskCompletion(channelId, threadTs)
+    }
   } else {
     // 親メッセージ → 新規 Notion ページ作成
     const redisKey = buildRedisKey(channelId, ts, '_bulk')
@@ -103,15 +115,51 @@ async function handleMessage(event: Record<string, unknown>): Promise<void> {
       channelName = '#' + ((ch?.name as string) ?? channelId)
     } catch { /* 取得失敗時はIDをそのまま */ }
 
+    let pageId: string | null = null
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pageId = await processSingleMessage(channelId, channelName, event as Record<string, any>)
+      pageId = await processSingleMessage(channelId, channelName, event as Record<string, any>)
       if (pageId) {
         await setNotionPageId(channelId, ts, pageId)
       }
     } catch (err) {
       console.error('[AutoCollect] processSingleMessage error:', err)
     }
+
+    // フェーズ6: タスクキーワード検知（保存成功時のみ）
+    if (pageId && detectTaskKeywords(rawText)) {
+      const userId = (event.user as string) ?? ''
+      void notifyTaskCandidate(channelId, ts, rawText, userId, pageId)
+    }
+  }
+}
+
+async function notifyTaskCandidate(
+  channelId: string,
+  originalTs: string,
+  rawText: string,
+  userId: string,
+  notionPageId: string
+): Promise<void> {
+  try {
+    const confirmMsgTs = await postTaskConfirmation(channelId, rawText)
+    await setPendingTask(channelId, confirmMsgTs, { notionPageId, rawText, userId, originalTs })
+  } catch (err) {
+    console.error('[Task] notifyTaskCandidate error:', err)
+  }
+}
+
+async function handleTaskCompletion(channelId: string, parentTs: string): Promise<void> {
+  try {
+    const meta = await getTaskMeta(channelId, parentTs)
+    if (!meta) return
+
+    await updateKnowledgePage(meta.notionPageId, { category: '完了' })
+
+    const userId = await getTaskUser(meta.notionPageId)
+    await postTaskComplete(channelId, userId ?? '', meta.title, meta.notionUrl)
+  } catch (err) {
+    console.error('[Task] handleTaskCompletion error:', err)
   }
 }
 
@@ -168,3 +216,4 @@ async function handleAppMention(event: Record<string, unknown>): Promise<void> {
     }
   }
 }
+

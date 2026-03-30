@@ -196,6 +196,211 @@ export async function postCollectComplete(channelId: string, count: number): Pro
   })
 }
 
+// ─── フェーズ6: タスク管理 ───
+
+// タスク候補確認メッセージ（ボタン付き）
+// 返り値: 送信したメッセージの ts
+export async function postTaskConfirmation(
+  channelId: string,
+  previewText: string
+): Promise<string> {
+  const preview = previewText.length > 40 ? previewText.slice(0, 40) + '…' : previewText
+  const result = await getSlackClient().chat.postMessage({
+    channel: channelId,
+    text: `📌 このメッセージをタスクに追加しますか？\n> ${preview}`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `📌 *このメッセージをタスクに追加しますか？*\n> ${preview}`,
+        },
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: 'タスクに追加' },
+            style: 'primary',
+            action_id: 'task_confirm_yes',
+          },
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: 'スキップ' },
+            action_id: 'task_confirm_no',
+          },
+        ],
+      },
+    ],
+  })
+  return result.ts as string
+}
+
+// 確認メッセージをテキストのみに更新（ボタン除去）
+export async function updateTaskMessage(
+  channelId: string,
+  messageTs: string,
+  text: string
+): Promise<void> {
+  await getSlackClient().chat.update({
+    channel: channelId,
+    ts: messageTs,
+    text,
+    blocks: [{ type: 'section', text: { type: 'mrkdwn', text } }],
+  })
+}
+
+// 日付ピッカーメッセージ（期日未検出時）
+// 返り値: 送信したメッセージの ts
+export async function showDatePickerMessage(
+  channelId: string,
+  messageTs: string,
+  previewText: string
+): Promise<void> {
+  const preview = previewText.length > 40 ? previewText.slice(0, 40) + '…' : previewText
+  const tomorrow = new Date(Date.now() + 9 * 3600 * 1000 + 86400 * 1000).toISOString().slice(0, 10)
+
+  await getSlackClient().chat.update({
+    channel: channelId,
+    ts: messageTs,
+    text: `📅 いつまでにやりますか？\n> ${preview}`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `📅 *いつまでにやりますか？*\n> ${preview}`,
+        },
+      },
+      {
+        type: 'actions',
+        block_id: 'date_block',
+        elements: [
+          {
+            type: 'datepicker',
+            action_id: 'task_date_picker',
+            initial_date: tomorrow,
+            placeholder: { type: 'plain_text', text: '日付を選択' },
+          },
+        ],
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: 'この日付で登録' },
+            style: 'primary',
+            action_id: 'task_date_confirm',
+          },
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: '日付なしで登録' },
+            action_id: 'task_no_date',
+          },
+        ],
+      },
+    ],
+  })
+}
+
+// タスク登録完了通知
+export async function postTaskRegistered(
+  channelId: string,
+  userId: string,
+  title: string,
+  notionUrl: string,
+  dueDate?: string
+): Promise<void> {
+  const dueLine = dueDate
+    ? `期日: ${dueDate.slice(5).replace('-', '/')}（${dueDate}）`
+    : '期日なし'
+
+  await getSlackClient().chat.postMessage({
+    channel: channelId,
+    text: `✅ タスクに登録しました（${dueLine}）`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `✅ *タスクに登録しました*（${dueLine}）\n<@${userId}> さんの担当として Notion に保存しました。`,
+        },
+      },
+      {
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: `<${notionUrl}|Notion で開く>　｜　${title}` }],
+      },
+    ],
+  })
+}
+
+// リマインダー通知
+export async function postTaskReminder(
+  channelId: string,
+  userId: string,
+  title: string,
+  dueDate: string,
+  notionUrl: string,
+  type: '2d' | '1d' | '0d'
+): Promise<void> {
+  const dateLabel = dueDate.slice(5).replace('-', '/')
+  const { emoji, label } = {
+    '2d': { emoji: '⏰', label: `期限2日前（${dateLabel} まで）` },
+    '1d': { emoji: '⚠️', label: '期限は明日' },
+    '0d': { emoji: '🔴', label: '本日期限（今日中！）' },
+  }[type]
+
+  await getSlackClient().chat.postMessage({
+    channel: channelId,
+    text: `${emoji} <@${userId}> ${label}: ${title}`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${emoji} <@${userId}> *${label}*\n${title}`,
+        },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Notion で開く' },
+          url: notionUrl,
+          action_id: 'notion_link',
+        },
+      },
+    ],
+  })
+}
+
+// タスク完了通知
+export async function postTaskComplete(
+  channelId: string,
+  userId: string,
+  title: string,
+  notionUrl: string
+): Promise<void> {
+  await getSlackClient().chat.postMessage({
+    channel: channelId,
+    text: `✅ タスク完了: ${title}`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `✅ *タスク完了*: ${title}\n<@${userId}> さんが完了しました。お疲れ様でした！`,
+        },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Notion で開く' },
+          url: notionUrl,
+          action_id: 'notion_link',
+        },
+      },
+    ],
+  })
+}
+
 // 使い方ヒントをスレッドへ返信
 export async function postUsageHint(
   channelId: string,

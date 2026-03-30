@@ -44,6 +44,62 @@ export async function createKnowledgePage(
   }
 }
 
+// ─── フェーズ6: タスク管理 ───
+
+export async function updateKnowledgePage(
+  pageId: string,
+  patch: { category?: string; dueDate?: string }
+): Promise<void> {
+  const notion = new Client({ auth: process.env.NOTION_TOKEN })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const properties: Record<string, any> = {}
+  if (patch.category !== undefined) {
+    properties['Category'] = { select: { name: patch.category } }
+  }
+  if (patch.dueDate !== undefined) {
+    properties['DueDate'] = { date: { start: patch.dueDate } }
+  }
+  if (Object.keys(properties).length === 0) return
+  await notion.pages.update({ page_id: pageId, properties })
+}
+
+export interface TaskRecord {
+  id: string
+  title: string
+  dueDate: string
+  notionUrl: string
+}
+
+export async function queryTasksDueSoon(): Promise<TaskRecord[]> {
+  const notion = new Client({ auth: process.env.NOTION_TOKEN })
+
+  const todayJST = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+  const twoDaysLaterJST = new Date(Date.now() + 9 * 3600 * 1000 + 2 * 86400 * 1000).toISOString().slice(0, 10)
+
+  const response = await notion.databases.query({
+    database_id: process.env.NOTION_DATABASE_ID!,
+    filter: {
+      and: [
+        { property: 'Category', select: { equals: 'タスク' } },
+        { property: 'DueDate', date: { on_or_after: todayJST } },
+        { property: 'DueDate', date: { on_or_before: twoDaysLaterJST } },
+      ],
+    },
+  })
+
+  return response.results
+    .map((page) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const p = page as any
+      const titleArr = p.properties?.Title?.title as Array<{ plain_text: string }> | undefined
+      const title = titleArr?.[0]?.plain_text ?? '（タイトルなし）'
+      const dueDate = (p.properties?.DueDate?.date?.start as string | undefined) ?? ''
+      const notionUrl = (p.url as string | undefined) ?? ''
+      return { id: p.id as string, title, dueDate, notionUrl }
+    })
+    .filter((r) => r.dueDate !== '')
+}
+
 export async function appendToKnowledgePage(pageId: string, text: string): Promise<void> {
   const notion = new Client({ auth: process.env.NOTION_TOKEN })
   const chunks: string[] = []

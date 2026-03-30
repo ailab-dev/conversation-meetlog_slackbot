@@ -79,6 +79,154 @@ export async function setAutoCollect(channelId: string): Promise<void> {
   }
 }
 
+// ─── フェーズ6: タスク管理 ───
+
+export interface PendingTask {
+  notionPageId: string
+  rawText: string
+  userId: string
+  originalTs: string
+}
+
+export interface DatePendingTask {
+  notionPageId: string
+  userId: string
+  originalTs: string
+  rawText: string
+  notionUrl: string
+  title: string
+}
+
+export interface TaskMeta {
+  notionPageId: string
+  notionUrl: string
+  title: string
+}
+
+const TASK_TTL = 60 * 60 * 24 * 90   // 90日
+const PENDING_TTL = 60 * 60 * 24 * 3  // 3日
+const REMINDER_TTL = 60 * 60 * 24 * 5 // 5日
+
+// タスク追加確認ボタン待ち
+export async function setPendingTask(channelId: string, confirmMsgTs: string, data: PendingTask): Promise<void> {
+  try {
+    await getRedis().set(`task_pending:${channelId}:${confirmMsgTs}`, JSON.stringify(data), { ex: PENDING_TTL })
+  } catch (err) {
+    console.error('[Redis] setPendingTask error:', err)
+  }
+}
+
+export async function getPendingTask(channelId: string, confirmMsgTs: string): Promise<PendingTask | null> {
+  try {
+    const raw = await getRedis().get<string>(`task_pending:${channelId}:${confirmMsgTs}`)
+    if (!raw) return null
+    return JSON.parse(raw) as PendingTask
+  } catch {
+    return null
+  }
+}
+
+export async function deletePendingTask(channelId: string, confirmMsgTs: string): Promise<void> {
+  try {
+    await getRedis().del(`task_pending:${channelId}:${confirmMsgTs}`)
+  } catch { /* ignore */ }
+}
+
+// 日付ピッカー待ち（期日未検出時）
+export async function setDatePendingTask(channelId: string, dateMsgTs: string, data: DatePendingTask): Promise<void> {
+  try {
+    await getRedis().set(`task_date_pending:${channelId}:${dateMsgTs}`, JSON.stringify(data), { ex: PENDING_TTL })
+  } catch (err) {
+    console.error('[Redis] setDatePendingTask error:', err)
+  }
+}
+
+export async function getDatePendingTask(channelId: string, dateMsgTs: string): Promise<DatePendingTask | null> {
+  try {
+    const raw = await getRedis().get<string>(`task_date_pending:${channelId}:${dateMsgTs}`)
+    if (!raw) return null
+    return JSON.parse(raw) as DatePendingTask
+  } catch {
+    return null
+  }
+}
+
+export async function deleteDataPendingTask(channelId: string, dateMsgTs: string): Promise<void> {
+  try {
+    await getRedis().del(`task_date_pending:${channelId}:${dateMsgTs}`)
+  } catch { /* ignore */ }
+}
+
+// タスク登録済みメタ（完了検知・リマインダー用）
+export async function setTaskMeta(channelId: string, originalMsgTs: string, data: TaskMeta): Promise<void> {
+  try {
+    await getRedis().set(`task_meta:${channelId}:${originalMsgTs}`, JSON.stringify(data), { ex: TASK_TTL })
+  } catch (err) {
+    console.error('[Redis] setTaskMeta error:', err)
+  }
+}
+
+export async function getTaskMeta(channelId: string, originalMsgTs: string): Promise<TaskMeta | null> {
+  try {
+    const raw = await getRedis().get<string>(`task_meta:${channelId}:${originalMsgTs}`)
+    if (!raw) return null
+    return JSON.parse(raw) as TaskMeta
+  } catch {
+    return null
+  }
+}
+
+// リマインダー送信先チャンネル
+export async function setTaskChannel(notionPageId: string, channelId: string): Promise<void> {
+  try {
+    await getRedis().set(`task_channel:${notionPageId}`, channelId, { ex: TASK_TTL })
+  } catch (err) {
+    console.error('[Redis] setTaskChannel error:', err)
+  }
+}
+
+export async function getTaskChannel(notionPageId: string): Promise<string | null> {
+  try {
+    return await getRedis().get<string>(`task_channel:${notionPageId}`)
+  } catch {
+    return null
+  }
+}
+
+// @メンション用ユーザー ID
+export async function setTaskUser(notionPageId: string, slackUserId: string): Promise<void> {
+  try {
+    await getRedis().set(`task_user:${notionPageId}`, slackUserId, { ex: TASK_TTL })
+  } catch (err) {
+    console.error('[Redis] setTaskUser error:', err)
+  }
+}
+
+export async function getTaskUser(notionPageId: string): Promise<string | null> {
+  try {
+    return await getRedis().get<string>(`task_user:${notionPageId}`)
+  } catch {
+    return null
+  }
+}
+
+// リマインダー重複送信防止
+export async function isReminderSent(notionPageId: string, type: '2d' | '1d' | '0d'): Promise<boolean> {
+  try {
+    return (await getRedis().exists(`reminder_sent:${notionPageId}:${type}`)) === 1
+  } catch {
+    return false
+  }
+}
+
+export async function markReminderSent(notionPageId: string, type: '2d' | '1d' | '0d'): Promise<void> {
+  try {
+    await getRedis().set(`reminder_sent:${notionPageId}:${type}`, '1', { ex: REMINDER_TTL })
+  } catch (err) {
+    console.error('[Redis] markReminderSent error:', err)
+  }
+}
+
 // ─── フェーズ4: チャンネル収集中フラグ ───
 
 function collectingKey(channelId: string): string {
